@@ -1,0 +1,52 @@
+# Python environments
+.venv/
+venv/
+env/
+
+# Python caches and packaging
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Local datasets and generated artifacts
+/data/
+/datasets/
+/artifacts/
+/models/
+/runs/
+/outputs/
+/results/
+/logs/
+
+# Model binaries
+*.pt
+*.pth
+*.onnx
+*.engine
+*.plan
+
+# Dataset archives
+*.zip
+*.7z
+*.rar
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
