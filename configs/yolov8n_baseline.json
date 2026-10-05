@@ -1,0 +1,37 @@
+{
+  "model": "yolov8n.pt",
+  "task": "detect",
+  "epochs": 30,
+  "imgsz": 416,
+  "batch": 4,
+  "patience": 8,
+  "workers": 2,
+  "seed": 42,
+  "deterministic": true,
+  "pretrained": true,
+  "optimizer": "auto",
+  "cache": false,
+  "project": "runs/detect",
+  "name": "neu_yolov8n_baseline",
+  "expected_dataset": {
+    "train": 2520,
+    "val": 360,
+    "test": 180,
+    "nc": 6
+  },
+  "offline_augmentation_only": true,
+  "training_augmentation": {
+    "hsv_h": 0.0,
+    "hsv_s": 0.0,
+    "hsv_v": 0.0,
+    "degrees": 0.0,
+    "translate": 0.0,
+    "scale": 0.0,
+    "shear": 0.0,
+    "perspective": 0.0,
+    "flipud": 0.0,
+    "fliplr": 0.0,
+    "mosaic": 0.0,
+    "mixup": 0.0
+  }
+}
