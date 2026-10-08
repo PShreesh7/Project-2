@@ -1,0 +1,10 @@
+{
+  "resolutions": [
+    320,
+    416,
+    512
+  ],
+  "batch": 4,
+  "map_tolerance": 0.01,
+  "split": "val"
+}

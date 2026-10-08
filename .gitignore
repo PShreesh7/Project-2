@@ -32,6 +32,7 @@ htmlcov/
 /outputs/
 /results/
 /logs/
+/NEU-DET/
 
 # Model binaries
 *.pt

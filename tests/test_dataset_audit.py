@@ -1,5 +1,3 @@
-"""Small synthetic fixtures test the auditor, not the real dataset."""
-
 import tempfile
 import unittest
 from pathlib import Path

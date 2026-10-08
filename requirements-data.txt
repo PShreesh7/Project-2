@@ -1,1 +1,2 @@
 Pillow==12.3.0
+albumentations==2.0.8

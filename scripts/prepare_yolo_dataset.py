@@ -13,6 +13,7 @@ from PIL import Image
 from scripts.audit_dataset import (
     CLASSES,
     IMAGE_SUFFIXES,
+    decoded_image_fingerprint,
 )
 
 
@@ -55,7 +56,9 @@ def index_files(
             groups.setdefault(
                 key,
                 [],
-            ).append(path)
+            ).append(
+                path
+            )
 
     indexed: dict[
         str,
@@ -63,7 +66,6 @@ def index_files(
     ] = {}
 
     for stem, paths in groups.items():
-
         if len(paths) != 1:
             raise ValueError(
                 f"{directory}: duplicate files "
@@ -86,7 +88,6 @@ def validate_image(
         with Image.open(
             image_path
         ) as image:
-
             image.load()
 
             width, height = (
@@ -355,16 +356,53 @@ def validate_split(
         Counter()
     )
 
+    content_hashes: dict[
+        str,
+        list[str],
+    ] = {}
+
     total_objects = 0
 
     for stem in sorted(
         image_stems
     ):
-
         validate_image(
             images[
                 stem
             ]
+        )
+
+        # Generate a decoded-image fingerprint.
+        #
+        # This is independent of the filename, so two images
+        # with different names but identical decoded pixels
+        # receive the same SHA-256 fingerprint.
+        try:
+            (
+                _,
+                _,
+                digest,
+            ) = decoded_image_fingerprint(
+                images[
+                    stem
+                ]
+            )
+
+        except (
+            OSError,
+            ValueError,
+            Image.DecompressionBombError,
+        ) as error:
+            raise ValueError(
+                "Unable to fingerprint image "
+                f"{images[stem]}: {error}"
+            ) from error
+
+        content_hashes.setdefault(
+            digest,
+            [],
+        ).append(
+            stem
         )
 
         counts = validate_label(
@@ -388,6 +426,7 @@ def validate_split(
 
     return {
         "stems": image_stems,
+        "content_hashes": content_hashes,
         "image_count": len(
             image_stems
         ),
@@ -396,8 +435,9 @@ def validate_split(
         ),
         "object_count": total_objects,
         "objects_by_class": {
-            CLASSES[class_id]:
-            class_objects.get(
+            CLASSES[
+                class_id
+            ]: class_objects.get(
                 class_id,
                 0,
             )
@@ -407,8 +447,9 @@ def validate_split(
             )
         },
         "images_by_class": {
-            CLASSES[class_id]:
-            image_class_presence.get(
+            CLASSES[
+                class_id
+            ]: image_class_presence.get(
                 class_id,
                 0,
             )
@@ -441,6 +482,11 @@ def run_preflight(
             CLASSES
         ),
         "splits": {},
+        "content_leakage": {
+            "train_val": [],
+            "train_test": [],
+            "val_test": [],
+        },
         "errors": [],
         "warnings": [],
     }
@@ -461,7 +507,6 @@ def run_preflight(
     raw_split_results = {}
 
     for split in SPLITS:
-
         try:
             result = validate_split(
                 dataset_root,
@@ -472,13 +517,20 @@ def run_preflight(
                 split
             ] = result
 
+            # Do not put internal stem sets or the complete
+            # SHA-256 mapping into the normal split report.
             report[
                 "splits"
-            ][split] = {
+            ][
+                split
+            ] = {
                 key: value
                 for key, value
                 in result.items()
-                if key != "stems"
+                if key not in {
+                    "stems",
+                    "content_hashes",
+                }
             }
 
         except ValueError as error:
@@ -495,24 +547,33 @@ def run_preflight(
     ) == len(
         SPLITS
     ):
-
         train_stems = (
             raw_split_results[
                 "train"
-            ]["stems"]
+            ][
+                "stems"
+            ]
         )
 
         val_stems = (
             raw_split_results[
                 "val"
-            ]["stems"]
+            ][
+                "stems"
+            ]
         )
 
         test_stems = (
             raw_split_results[
                 "test"
-            ]["stems"]
+            ][
+                "stems"
+            ]
         )
+
+        # ---------------------------------------------------------
+        # Filename/stem leakage check
+        # ---------------------------------------------------------
 
         overlap_train_val = (
             train_stems
@@ -553,10 +614,100 @@ def run_preflight(
                 "between val and test."
             )
 
+        # ---------------------------------------------------------
+        # Decoded-image content leakage check
+        # ---------------------------------------------------------
+        #
+        # Filename checking alone is not enough because the same
+        # image can exist under a different filename.
+        #
+        # Here we compare SHA-256 hashes created from decoded RGB
+        # pixels plus image dimensions.
+
+        for first, second in (
+            (
+                "train",
+                "val",
+            ),
+            (
+                "train",
+                "test",
+            ),
+            (
+                "val",
+                "test",
+            ),
+        ):
+            first_hashes = (
+                raw_split_results[
+                    first
+                ][
+                    "content_hashes"
+                ]
+            )
+
+            second_hashes = (
+                raw_split_results[
+                    second
+                ][
+                    "content_hashes"
+                ]
+            )
+
+            shared_hashes = sorted(
+                set(
+                    first_hashes
+                )
+                & set(
+                    second_hashes
+                )
+            )
+
+            pair_key = (
+                f"{first}_{second}"
+            )
+
+            leakage_details = []
+
+            for digest in shared_hashes:
+                leakage_details.append(
+                    {
+                        "sha256": digest,
+                        first: first_hashes[
+                            digest
+                        ],
+                        second: second_hashes[
+                            digest
+                        ],
+                    }
+                )
+
+            report[
+                "content_leakage"
+            ][
+                pair_key
+            ] = leakage_details
+
+            if shared_hashes:
+                report[
+                    "errors"
+                ].append(
+                    "Content leakage detected "
+                    f"between {first} and {second}: "
+                    f"{len(shared_hashes)} identical "
+                    "decoded image fingerprint(s)."
+                )
+
+        # ---------------------------------------------------------
+        # Dataset totals
+        # ---------------------------------------------------------
+
         total_samples = sum(
             raw_split_results[
                 split
-            ]["image_count"]
+            ][
+                "image_count"
+            ]
             for split in SPLITS
         )
 
@@ -569,7 +720,9 @@ def run_preflight(
         ] = sum(
             raw_split_results[
                 split
-            ]["object_count"]
+            ][
+                "object_count"
+            ]
             for split in SPLITS
         )
 
@@ -587,6 +740,10 @@ def run_preflight(
                 f"found {total_samples}."
             )
 
+        # ---------------------------------------------------------
+        # Class coverage
+        # ---------------------------------------------------------
+
         train_classes = (
             raw_split_results[
                 "train"
@@ -596,7 +753,6 @@ def run_preflight(
         )
 
         for class_name in CLASSES:
-
             if (
                 train_classes[
                     class_name
@@ -624,7 +780,6 @@ def run_preflight(
             )
 
             for class_name in CLASSES:
-
                 if (
                     distribution[
                         class_name
@@ -728,6 +883,7 @@ def write_report(
 
 
 def main() -> int:
+    """Command-line entry point."""
 
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -782,7 +938,6 @@ def main() -> int:
     if report[
         "status"
     ] != "PASSED":
-
         print(
             "YOLO dataset preflight: FAILED"
         )
@@ -822,11 +977,12 @@ def main() -> int:
     )
 
     for split in SPLITS:
-
         details = (
             report[
                 "splits"
-            ][split]
+            ][
+                split
+            ]
         )
 
         print(
@@ -838,7 +994,6 @@ def main() -> int:
     if report[
         "warnings"
     ]:
-
         print(
             "\nWarnings:"
         )

@@ -60,10 +60,30 @@ class YoloPreflightTests(
         label_line: str | None = None,
     ) -> None:
 
+        # Give each split a different base pixel value.
+        #
+        # This prevents normal synthetic fixtures from
+        # accidentally having identical decoded content
+        # across train, validation, and test.
+        split_base = {
+            "train": 20,
+            "val": 100,
+            "test": 180,
+        }[
+            split
+        ]
+
         Image.new(
             "RGB",
-            (200, 200),
-            color=100,
+            (
+                200,
+                200,
+            ),
+            color=(
+                split_base + class_id,
+                split_base + class_id,
+                split_base + class_id,
+            ),
         ).save(
             self.root
             / "images"
@@ -149,6 +169,33 @@ class YoloPreflightTests(
             [],
         )
 
+        self.assertEqual(
+            report[
+                "content_leakage"
+            ][
+                "train_val"
+            ],
+            [],
+        )
+
+        self.assertEqual(
+            report[
+                "content_leakage"
+            ][
+                "train_test"
+            ],
+            [],
+        )
+
+        self.assertEqual(
+            report[
+                "content_leakage"
+            ][
+                "val_test"
+            ],
+            [],
+        )
+
     def test_missing_label_fails(
         self,
     ):
@@ -211,6 +258,15 @@ class YoloPreflightTests(
             "FAILED",
         )
 
+        self.assertTrue(
+            any(
+                "invalid class id"
+                in error.lower()
+                for error
+                in report["errors"]
+            )
+        )
+
     def test_out_of_bounds_box_fails(
         self,
     ):
@@ -240,6 +296,15 @@ class YoloPreflightTests(
         self.assertEqual(
             report["status"],
             "FAILED",
+        )
+
+        self.assertTrue(
+            any(
+                "outside image bounds"
+                in error.lower()
+                for error
+                in report["errors"]
+            )
         )
 
     def test_expected_total_mismatch_fails(
@@ -300,6 +365,97 @@ class YoloPreflightTests(
                 in error.lower()
                 for error
                 in report["errors"]
+            )
+        )
+
+    def test_identical_content_across_splits_fails(
+        self,
+    ):
+
+        self.create_valid_dataset()
+
+        source = (
+            self.root
+            / "images"
+            / "train"
+            / "train_0.jpg"
+        )
+
+        target = (
+            self.root
+            / "images"
+            / "val"
+            / "copied_duplicate.jpg"
+        )
+
+        # Copy the exact encoded image bytes to a different
+        # filename in another split. Filename-based leakage
+        # detection alone cannot detect this.
+        target.write_bytes(
+            source.read_bytes()
+        )
+
+        (
+            self.root
+            / "labels"
+            / "val"
+            / "copied_duplicate.txt"
+        ).write_text(
+            (
+                "0 "
+                "0.500000 "
+                "0.500000 "
+                "0.250000 "
+                "0.250000\n"
+            ),
+            encoding="utf-8",
+        )
+
+        report = run_preflight(
+            self.root
+        )
+
+        self.assertEqual(
+            report["status"],
+            "FAILED",
+        )
+
+        self.assertTrue(
+            any(
+                "content leakage"
+                in error.lower()
+                for error
+                in report["errors"]
+            )
+        )
+
+        self.assertGreater(
+            len(
+                report[
+                    "content_leakage"
+                ][
+                    "train_val"
+                ]
+            ),
+            0,
+        )
+
+        leakage = (
+            report[
+                "content_leakage"
+            ][
+                "train_val"
+            ]
+        )
+
+        self.assertTrue(
+            any(
+                "train_0"
+                in item["train"]
+                and
+                "copied_duplicate"
+                in item["val"]
+                for item in leakage
             )
         )
 
