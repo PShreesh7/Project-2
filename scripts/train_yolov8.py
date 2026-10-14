@@ -128,7 +128,22 @@ def build_training_arguments(
         ] = config[
             "fraction"
         ]
-
+        # Optional optimization hyperparameters.
+    # These are forwarded only when explicitly
+    # supplied by an experiment configuration.
+    for key in (
+        "lr0",
+        "lrf",
+        "momentum",
+        "weight_decay",
+        "warmup_epochs",
+    ):
+        if key in config:
+            arguments[
+                key
+            ] = config[
+                key
+            ]
     # On CPU, mixed precision does not provide
     # the CUDA acceleration benefit we want.
     arguments[

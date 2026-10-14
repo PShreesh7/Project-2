@@ -270,7 +270,62 @@ class TrainingRunnerTests(
                     "required_artifacts_present"
                 ]
             )
+    def test_optional_hyperparameters_are_forwarded(
+        self,
+    ):
 
+        config = (
+            self.valid_config()
+        )
+
+        config.update(
+            {
+                "optimizer": "AdamW",
+                "lr0": 0.001,
+                "lrf": 0.01,
+                "momentum": 0.937,
+                "weight_decay": 0.0005,
+                "warmup_epochs": 3.0,
+            }
+        )
+
+        args = (
+            build_training_arguments(
+                config,
+                Path(
+                    "data.yaml"
+                ),
+                device="cpu",
+            )
+        )
+
+        self.assertEqual(
+            args[
+                "optimizer"
+            ],
+            "AdamW",
+        )
+
+        self.assertEqual(
+            args[
+                "lr0"
+            ],
+            0.001,
+        )
+
+        self.assertEqual(
+            args[
+                "lrf"
+            ],
+            0.01,
+        )
+
+        self.assertEqual(
+            args[
+                "weight_decay"
+            ],
+            0.0005,
+        )
 
 if __name__ == "__main__":
     unittest.main()

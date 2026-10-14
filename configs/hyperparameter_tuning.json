@@ -1,0 +1,35 @@
+{
+  "search_epochs": 12,
+  "batch": 4,
+  "workers": 0,
+  "patience": 4,
+  "seed": 42,
+  "map_tolerance": 0.005,
+  "experiments": [
+    {
+      "name": "adamw_lr1e3",
+      "optimizer": "AdamW",
+      "lr0": 0.001,
+      "lrf": 0.01,
+      "weight_decay": 0.0005,
+      "warmup_epochs": 3.0
+    },
+    {
+      "name": "adamw_lr5e4",
+      "optimizer": "AdamW",
+      "lr0": 0.0005,
+      "lrf": 0.01,
+      "weight_decay": 0.0005,
+      "warmup_epochs": 3.0
+    },
+    {
+      "name": "sgd_lr1e2",
+      "optimizer": "SGD",
+      "lr0": 0.01,
+      "lrf": 0.01,
+      "momentum": 0.937,
+      "weight_decay": 0.0005,
+      "warmup_epochs": 3.0
+    }
+  ]
+}
